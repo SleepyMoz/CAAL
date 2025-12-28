@@ -7,7 +7,9 @@ import 'package:livekit_components/livekit_components.dart' as components;
 import 'package:logging/logging.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/caal_token_source.dart';
+import '../services/wake_word_service.dart';
 
 enum AppScreenState { welcome, agent }
 
@@ -31,6 +33,10 @@ class AppCtrl extends ChangeNotifier {
   late final sdk.Room room = sdk.Room(roomOptions: const sdk.RoomOptions(enableVisualizer: true));
   late final roomContext = components.RoomContext(room: room);
   late final sdk.Session session = _createSession();
+
+  // Wake word detection
+  late final WakeWordService wakeWordService;
+  bool get isWakeWordEnabled => wakeWordService.isEnabled;
 
   static String get _caalServerUrl {
     final url = dotenv.env['CAAL_SERVER_URL']?.replaceAll('"', '');
@@ -67,12 +73,24 @@ class AppCtrl extends ChangeNotifier {
     });
 
     session.addListener(_handleSessionChange);
+
+    // Initialize wake word service (not started until user enables it)
+    wakeWordService = WakeWordService(onWakeWordDetected: _onWakeWordDetected);
+  }
+
+  /// Called when wake word is detected - unmutes the microphone.
+  void _onWakeWordDetected() {
+    _logger.info('Wake word detected, unmuting mic...');
+    // The mic unmuting happens in the control bar via MediaDeviceContext
+    // We just notify listeners so UI can react
+    notifyListeners();
   }
 
   Future<void> _cleanUp() async {
     if (_hasCleanedUp) return;
     _hasCleanedUp = true;
 
+    await wakeWordService.dispose();
     session.removeListener(_handleSessionChange);
     await session.dispose();
     await room.dispose();
@@ -129,6 +147,7 @@ class AppCtrl extends ChangeNotifier {
       await session.start();
       if (session.connectionState == sdk.ConnectionState.connected) {
         appScreenState = AppScreenState.agent;
+        WakelockPlus.enable();
         notifyListeners();
       }
     } catch (error, stackTrace) {
@@ -146,6 +165,7 @@ class AppCtrl extends ChangeNotifier {
   Future<void> disconnect() async {
     await session.end();
     session.restoreMessageHistory(const []);
+    WakelockPlus.disable();
     appScreenState = AppScreenState.welcome;
     agentScreenState = AgentScreenState.visualizer;
     notifyListeners();
