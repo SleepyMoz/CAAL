@@ -23,12 +23,12 @@ import json
 import logging
 import time
 from collections.abc import AsyncIterable
-from typing import Any
+from typing import Any, cast
 
 import ollama
 
-from ..utils.formatting import strip_markdown_for_tts
 from ..integrations.n8n import execute_n8n_workflow
+from ..utils.formatting import strip_markdown_for_tts
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class ToolDataCache:
     def __init__(self, max_entries: int = 3):
         self.max_entries = max_entries
         self._cache: list[dict] = []
+        self._tools_cache: list[dict] | None = None
 
     def add(self, tool_name: str, data: Any) -> None:
         """Add tool response data to cache."""
@@ -176,7 +177,7 @@ async def ollama_llm_node(
 
                     # Execute tools and get results (cache structured data)
                     messages = await _execute_tool_calls(
-                        agent, messages, tool_calls, response.message,
+                        agent, messages, list(tool_calls), response.message,
                         tool_data_cache=tool_data_cache,
                     )
 
@@ -308,7 +309,7 @@ def _build_messages_from_context(
     return messages
 
 
-async def _discover_tools(agent) -> list[dict] | None:
+async def _discover_tools(agent) -> Any:
     """Discover tools from agent methods and MCP servers.
 
     Tools are cached on the agent instance after first discovery to avoid
@@ -336,13 +337,13 @@ async def _discover_tools(agent) -> list[dict] | None:
                         continue
                     param_type = "string"
                     if param.annotation != inspect.Parameter.empty:
-                        if param.annotation == str:
+                        if param.annotation is str:
                             param_type = "string"
-                        elif param.annotation == int:
+                        elif param.annotation is int:
                             param_type = "integer"
-                        elif param.annotation == float:
+                        elif param.annotation is float:
                             param_type = "number"
-                        elif param.annotation == bool:
+                        elif param.annotation is bool:
                             param_type = "boolean"
                     properties[param_name] = {"type": param_type}
                     if param.default == inspect.Parameter.empty and param_name != "self":
@@ -383,7 +384,7 @@ async def _discover_tools(agent) -> list[dict] | None:
         ollama_tools.extend(agent._n8n_workflow_tools)
 
     # Cache tools on agent and return
-    result = ollama_tools if ollama_tools else None
+    result: list[dict] | None = ollama_tools if ollama_tools else None
     agent._ollama_tools_cache = result
 
     return result
@@ -391,7 +392,7 @@ async def _discover_tools(agent) -> list[dict] | None:
 
 async def _get_mcp_tools(mcp_server) -> list[dict]:
     """Get tools from an MCP server in Ollama format."""
-    tools = []
+    tools: list[dict] = []
 
     if not mcp_server or not hasattr(mcp_server, "_client") or not mcp_server._client:
         return tools
@@ -447,14 +448,15 @@ async def _execute_tool_calls(
     """
 
     # Add assistant message with tool calls
-    tool_call_message = {
+    tool_call_message: dict[str, Any] = {
         "role": "assistant",
         "content": getattr(response_message, "content", "") or "",
         "tool_calls": [],
     }
 
     for tool_call in tool_calls:
-        tool_call_message["tool_calls"].append({
+        tool_calls_list = cast(list, tool_call_message["tool_calls"])
+        tool_calls_list.append({
             "id": getattr(tool_call, "id", ""),
             "function": {
                 "name": tool_call.function.name,

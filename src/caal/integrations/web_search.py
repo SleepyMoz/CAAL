@@ -12,7 +12,7 @@ Usage:
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 import ollama
 from livekit.agents import function_tool
@@ -41,13 +41,14 @@ class WebSearchTools:
     - _search_max_results: int = 5
     - _search_timeout: float = 10.0
     """
-
+    llm: Any = None
     _search_max_results: int = 5
     _search_timeout: float = 10.0
 
     @function_tool
     async def web_search(self, query: str) -> str:
-        """Search the web for current events, news, prices, store hours, or any time-sensitive information not available from other tools.
+        """Search the web for current events, news, prices, store hours,
+        or any time-sensitive information not available from other tools.
 
         Args:
             query: What to search for on the web.
@@ -125,5 +126,5 @@ class WebSearchTools:
             logger.error(f"Summarization error: {e}")
             # Fallback: return first result's snippet
             if results:
-                return results[0].get("body", "No description available.")
+                return cast(str, results[0].get("body", "No description available."))
             return "I had trouble processing the search results."
