@@ -367,19 +367,19 @@ def preload_models():
 
     logger.info("Preloading models...")
 
-    # Download Whisper STT model
-    try:
-        logger.info(f"  Loading STT: {whisper_model}")
-        response = requests.post(
-            f"{speaches_url}/v1/models/{whisper_model}",
-            timeout=300
-        )
-        if response.status_code == 200:
-            logger.info("  ✓ STT ready")
-        else:
-            logger.warning(f"  STT model download returned {response.status_code}")
-    except Exception as e:
-        logger.warning(f"  Failed to preload STT model: {e}")
+    # # Download Whisper STT model
+    # try:
+    #     logger.info(f"  Loading STT: {whisper_model}")
+    #     response = requests.post(
+    #         f"{speaches_url}/v1/models/{whisper_model}",
+    #         timeout=300
+    #     )
+    #     if response.status_code == 200:
+    #         logger.info("  ✓ STT ready")
+    #     else:
+    #         logger.warning(f"  STT model download returned {response.status_code}")
+    # except Exception as e:
+    #     logger.warning(f"  Failed to preload STT model: {e}")
 
     # Warm up Ollama LLM with correct num_ctx (loads model into VRAM)
     try:
